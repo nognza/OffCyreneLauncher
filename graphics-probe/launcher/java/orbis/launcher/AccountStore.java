@@ -61,12 +61,7 @@ final class AccountStore {
     synchronized List<Account> list() { return List.copyOf(accounts); }
     /** Microsoft accounts are saved only after Minecraft ownership was confirmed (MicrosoftAuthClient). */
     synchronized boolean hasOwnedMinecraft() {
-        for (Account account : accounts) {
-            if (!"microsoft".equals(account.kind())) continue;
-            try { credential(account.id()); return true; }
-            catch (IOException unavailable) { /* Expired or missing sign-in does not grant offline use. */ }
-        }
-        return false;
+        return true; // [MOD] Offline use no longer depends on a saved Microsoft credential.
     }
     synchronized Account get(String id) {
         return accounts.stream().filter(account -> account.id().equals(id)).findFirst().orElse(null);
@@ -109,9 +104,7 @@ final class AccountStore {
         return new Session(account.username(), account.uuid(), "0", "legacy", "", "");
     }
 
-    private void requireOwnedMinecraft() throws IOException {
-        if (!hasOwnedMinecraft()) throw new IOException("Offline accounts require a saved Microsoft account that owns Minecraft: Java Edition. Sign in again.");
-    }
+    private void requireOwnedMinecraft() throws IOException { /* [MOD] Offline accounts no longer require a saved Microsoft account. */ }
 
     private static String offlineUuid(String name) throws IOException {
         if (name == null || !name.matches("[A-Za-z0-9_]{1,16}"))
@@ -213,7 +206,7 @@ final class AccountStore {
         // Sign-out revokes local use first, even if metadata persistence subsequently fails.
         if ("microsoft".equals(old.kind())) clearCredential(id);
         accounts.remove(old);
-        if (!hasOwnedMinecraft()) accounts.removeIf(account -> "offline".equals(account.kind()));
+        // [MOD] Offline accounts survive signing out the last Microsoft account.
         String previous = defaultId;
         if (get(defaultId) == null) defaultId = accounts.isEmpty() ? "" : accounts.get(0).id();
         try { save(); }
@@ -248,7 +241,7 @@ final class AccountStore {
                 }
                 if (accounts.stream().map(Account::id).distinct().count() != accounts.size())
                     throw new IOException("Invalid saved account list");
-                if (!hasOwnedMinecraft()) accounts.removeIf(account -> "offline".equals(account.kind()));
+                // [MOD] Offline accounts survive even without a saved Microsoft credential.
                 if (get(defaultId) == null) defaultId = accounts.isEmpty() ? "" : accounts.get(0).id();
                 save();
                 return;
